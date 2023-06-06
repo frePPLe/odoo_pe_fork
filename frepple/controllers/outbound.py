@@ -2280,15 +2280,27 @@ class exporter(object):
         sum(stock.report.prodlots.qty) -> buffer.onhand
         """
         yield "<!-- inventory -->\n"
-        yield "<buffers>\n"
+        yield "<operationplans>\n"
         if isinstance(self.generator, Odoo_generator):
             # SQL query gives much better performance
             self.generator.env.cr.execute(
-                "SELECT product_id, location_id, sum(quantity), sum(reserved_quantity) "
-                "FROM stock_quant "
-                "WHERE quantity > 0 "
-                "GROUP BY product_id, location_id "
-                "ORDER BY location_id ASC"
+                """
+                SELECT stock_quant.product_id,
+                stock_quant.location_id,
+                sum(stock_quant.quantity) as quantity,
+                sum(stock_quant.reserved_quantity) as reserved_quantity,
+                stock_production_lot.name as lot_name,
+                stock_production_lot.expiration_date
+                FROM stock_quant
+                left outer join stock_production_lot on stock_quant.lot_id = stock_production_lot.id
+                and stock_production_lot.product_id = stock_quant.product_id
+                WHERE quantity > 0
+                GROUP BY stock_quant.product_id,
+                stock_quant.location_id,
+                stock_production_lot.name,
+                stock_production_lot.expiration_date
+                ORDER BY location_id ASC
+                """
             )
             data = self.generator.env.cr.fetchall()
         else:
@@ -2307,24 +2319,42 @@ class exporter(object):
                 if i["product_id"] and i["location_id"]
             ]
         inventory = {}
+        expirationdate = {}
         for i in data:
             item = self.product_product.get(i[0], None)
             location = self.map_locations.get(i[1], None)
+            lotname = i[4]
             if item and location:
-                inventory[(item["name"], location)] = (
-                    inventory.get((item["name"], location), 0)
+                inventory[(item["name"], location, lotname)] = (
+                    inventory.get((item["name"], location, lotname), 0)
                     + i[2]
                     - (i[3] if self.respect_reservations else 0)
                 )
+                if i[5]:
+                    expirationdate[(item["name"], location, lotname)] = i[5]
         for key, val in inventory.items():
-            buf = "%s @ %s" % (key[0], key[1])
-            yield '<buffer name=%s onhand="%f"><item name=%s/><location name=%s/></buffer>\n' % (
-                quoteattr(buf),
-                val,
-                quoteattr(key[0]),
-                quoteattr(key[1]),
+            yield (
+                """
+            <operationplan ordertype="STCK" end="%s" reference=%s %s quantity="%s">
+			<item name=%s/>
+			<location name=%s/>
+		    </operationplan>
+            """
+                % (
+                    self.formatDateTime(datetime.now()),
+                    quoteattr(
+                        "STCK %s @ %s%s"
+                        % (key[0], key[1], (" @ %s" % (key[2],)) if key[2] else "")
+                    ),
+                    ('expiry="%s"' % self.formatDateTime(expirationdate[key]))
+                    if key in expirationdate
+                    else "",
+                    val or 0,
+                    quoteattr(key[0]),
+                    quoteattr(key[1]),
+                )
             )
-        yield "</buffers>\n"
+        yield "</operationplans>\n"
 
 
 if __name__ == "__main__":
