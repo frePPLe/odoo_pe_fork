@@ -812,6 +812,7 @@ class exporter(object):
                 "uom_id",
                 "categ_id",
                 "product_variant_ids",
+                "expiration_time",
             ],
         ):
             self.product_templates[i["id"]] = i
@@ -867,7 +868,7 @@ class exporter(object):
             self.product_product[i["id"]] = prod_obj
             self.product_template_product[i["product_tmpl_id"][0]] = prod_obj
             # For make-to-order items the next line needs to XML snippet ' type="item_mto"'.
-            yield '<item name=%s uom=%s volume="%f" weight="%f" cost="%f" category=%s subcategory="%s,%s">\n' % (
+            yield '<item name=%s uom=%s volume="%f" weight="%f" cost="%f" category=%s subcategory="%s,%s"%s>\n' % (
                 quoteattr(name),
                 quoteattr(tmpl["uom_id"][1]) if tmpl["uom_id"] else "",
                 i["volume"] or 0,
@@ -880,6 +881,9 @@ class exporter(object):
                 quoteattr(tmpl["categ_id"][1]) if tmpl["categ_id"] else '""',
                 self.uom_categories[self.uom[tmpl["uom_id"][0]]["category"]],
                 i["id"],
+                (' shelflife="%s"' % self.convert_float_time(tmpl["expiration_time"]))
+                if tmpl["expiration_time"] and tmpl["expiration_time"] > 0
+                else "",
             )
             # Export suppliers for the item, if the item is allowed to be purchased
             if tmpl["purchase_ok"]:
