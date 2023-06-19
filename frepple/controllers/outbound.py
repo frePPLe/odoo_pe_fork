@@ -265,8 +265,7 @@ class exporter(object):
             if with_mrp:
                 logger.debug("Exporting manufacturing orders.")
                 yield from self.export_manufacturingorders()
-            logger.debug("Exporting reordering rules.")
-            yield from self.export_orderpoints()
+
             logger.debug("Exporting quantities on-hand.")
             yield from self.export_onhand()
 
@@ -594,22 +593,30 @@ class exporter(object):
         first = True
         for i in self.generator.getData(
             "stock.warehouse",
-            fields=["name"],
+            fields=["name", "is_nationwide"],
         ):
             if first:
                 yield "<!-- warehouses -->\n"
                 yield "<locations>\n"
                 first = False
             if self.calendar:
-                yield '<location name=%s subcategory="%s"><available name=%s/></location>\n' % (
+                yield """
+                <location name=%s subcategory="%s"><available name=%s/>
+                <booleanproperty name="nationwide" value="%s"/>
+                </location>\n
+                 """ % (
                     quoteattr(i["name"]),
                     i["id"],
                     quoteattr(self.calendar),
+                    "true" if i["is_nationwide"] else "false",
                 )
             else:
-                yield '<location name=%s subcategory="%s"></location>\n' % (
+                yield """<location name=%s subcategory="%s">
+                        <booleanproperty name="nationwide" value="%s"/>
+                        </location>\n""" % (
                     quoteattr(i["name"]),
                     i["id"],
+                    "true" if i["is_nationwide"] else "false",
                 )
             self.warehouses[i["id"]] = i["name"]
         if not first:
@@ -899,6 +906,31 @@ class exporter(object):
                         fields=supplierinfo_fields,
                     )
                 suppliers = {}
+
+                size_multiple = 1
+                # read the reordering rules to get the itemsupplier size multiple
+                # read item supplier size multiple from reordering rules
+                for rr in self.generator.getData(
+                    "stock.warehouse.orderpoint",
+                    fields=[
+                        "warehouse_id",
+                        "product_id",
+                        "product_uom",
+                        "qty_multiple",
+                    ],
+                    search=[
+                        ("product_id", "=", i["id"]),
+                        ("qty_multiple", "!=", False),
+                    ],
+                ):
+                    uom_factor = self.convert_qty_uom(
+                        1.0,
+                        rr["product_uom"][0],
+                        self.product_product[i["id"]]["template"],
+                    )
+                    size_multiple = uom_factor * rr["qty_multiple"]
+                    break
+
                 for sup in results:
                     name = "%d %s" % (sup["name"][0], sup["name"][1])
                     if sup.get("is_subcontractor", False):
@@ -910,6 +942,7 @@ class exporter(object):
                                 "delay": sup["delay"],
                                 "priority": sup["sequence"] or 1,
                                 "size_minimum": sup["min_qty"],
+                                "size_multiple": size_multiple,
                             }
                         )
                     elif (name, sup["date_start"]) in suppliers:
@@ -954,11 +987,12 @@ class exporter(object):
                 if suppliers:
                     yield "<itemsuppliers>\n"
                     for k, v in suppliers.items():
-                        yield '<itemsupplier leadtime="P%dD" priority="%s" batchwindow="P%dD" size_minimum="%f" cost="%f"%s%s><supplier name=%s/></itemsupplier>\n' % (
+                        yield '<itemsupplier leadtime="P%dD" priority="%s" batchwindow="P%dD" size_minimum="%f" size_multiple="%f" cost="%f"%s%s><supplier name=%s/></itemsupplier>\n' % (
                             v["delay"],
                             v["sequence"] or 1,
                             v["batching_window"] or 0,
                             v["min_qty"],
+                            size_multiple,
                             max(0, v["price"]),
                             ' effective_end="%sT00:00:00"'
                             % v["date_end"].strftime("%Y-%m-%d")
@@ -1031,6 +1065,8 @@ class exporter(object):
             i["id"]: i for i in self.generator.getData("mrp.secondary.workcenter")
         }
 
+        visited_products = []
+
         # Loop over all bom records
         for i in self.generator.getData(
             "mrp.bom",
@@ -1043,13 +1079,15 @@ class exporter(object):
                 "bom_line_ids",
                 "sequence",
             ],
+            order="sequence asc",
         ):
             # Determine the location
             location = self.mfg_location
 
             product_template = self.product_templates.get(i["product_tmpl_id"][0], None)
-            if not product_template:
+            if not product_template or product_template["id"] in visited_products:
                 continue
+            visited_products.append(product_template["id"])
             uom_factor = self.convert_qty_uom(
                 1.0, i["product_uom_id"], i["product_tmpl_id"][0]
             )
