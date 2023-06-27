@@ -1779,6 +1779,7 @@ class exporter(object):
                     "product_id",
                     "product_qty",
                     "qty_received",
+                    "qty_received_manual",
                     "product_uom",
                     "order_id",
                     "state",
@@ -1802,7 +1803,8 @@ class exporter(object):
         yield "<!-- open purchase orders from PO lines -->\n"
         yield "<operationplans>\n"
         for i in po_line.values():
-            if i["move_ids"]:
+            # We ignore the move ids for PE
+            if i["move_ids"] and False:
                 # Use the stock move information rather than the po line
                 stock_move_ids.extend(i["move_ids"])
                 continue
@@ -1822,6 +1824,16 @@ class exporter(object):
                     i["product_uom"],
                     self.product_product[i["product_id"][0]]["template"],
                 )
+                qty_manual = (
+                    self.convert_qty_uom(
+                        i["product_qty"] - i["qty_received_manual"],
+                        i["product_uom"],
+                        self.product_product[i["product_id"][0]]["template"],
+                    )
+                    if i["qty_received_manual"]
+                    else 0
+                )
+                qty = max(qty, qty_manual)
                 yield '<operationplan reference=%s ordertype="PO" start="%s" end="%s" quantity="%f" status="confirmed">' "<item name=%s/><location name=%s/><supplier name=%s/></operationplan>\n" % (
                     quoteattr("%s - %s" % (j["name"], i["id"])),
                     start,
