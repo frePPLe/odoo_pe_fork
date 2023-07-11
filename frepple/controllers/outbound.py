@@ -1,4 +1,4 @@
-b# -*- coding: utf-8 -*-
+b  # -*- coding: utf-8 -*-
 #
 # Copyright (C) 2014 by frePPLe bv
 #
@@ -2071,7 +2071,7 @@ class exporter(object):
                 # There are no workorders on the manufacturing order
                 yield '<operation name=%s xsi:type="operation_fixed_time"><location name=%s/><item name=%s/><flows>' % (
                     quoteattr(operation),
-                    quoteattr(self.map_locations[i["location_dest_id"][0]])
+                    quoteattr(self.map_locations[i["location_dest_id"][0]]),
                     quoteattr(item["name"]),
                 )
                 for mv in mv_list:
@@ -2100,9 +2100,9 @@ class exporter(object):
                         quoteattr(consumed_item["name"]),
                     )
                 yield '<flow quantity="%s"><item name=%s/></flow>\n' % (
-                        qty,
-                        quoteattr(item["name"]),
-                    )
+                    qty,
+                    quoteattr(item["name"]),
+                )
                 yield "</flows></operation></operationplan>"
             else:
                 # Define an operation for the MO
