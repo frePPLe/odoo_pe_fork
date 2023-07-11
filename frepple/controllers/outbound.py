@@ -1,4 +1,4 @@
-b  # -*- coding: utf-8 -*-
+# -*- coding: utf-8 -*-
 #
 # Copyright (C) 2014 by frePPLe bv
 #
