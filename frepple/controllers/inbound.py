@@ -336,8 +336,10 @@ class importer(object):
                         mo = mfg_order.with_context(context).create(
                             {
                                 "product_qty": elem.get("quantity"),
-                                "date_planned_start": elem.get("start"),
-                                "date_planned_finished": elem.get("end"),
+                                "date_planned_start": "%s%s"
+                                % (elem.get("start")[:-8], "00:00:00"),
+                                "date_planned_finished": "%s%s"
+                                % (elem.get("end")[:-8], "00:00:00"),
                                 "product_id": int(item_id),
                                 "company_id": self.company.id,
                                 "product_uom_id": int(uom_id),

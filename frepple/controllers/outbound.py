@@ -152,6 +152,8 @@ class exporter(object):
         timezone=None,
         singlecompany=False,
         version="0.0.0.unknown",
+        startdate=datetime.now() - timedelta(days=1),
+        enddate=datetime.now(),
     ):
         self.database = database
         self.company = company
@@ -175,6 +177,8 @@ class exporter(object):
                 self.timezone = i["tz"] or "UTC"
         self.timeformat = "%Y-%m-%dT%H:%M:%S"
         self.singlecompany = singlecompany
+        self.startdate = startdate
+        self.enddate = enddate
 
         # The mode argument defines different types of runs:
         #  - Mode 1:
@@ -1079,6 +1083,7 @@ class exporter(object):
                 "bom_line_ids",
                 "sequence",
             ],
+            search=[("type", "!=", "phantom")],
             order="sequence asc",
         ):
             # Determine the location
@@ -1513,7 +1518,19 @@ class exporter(object):
         # Get all sales order lines
         so_line = self.generator.getData(
             "sale.order.line",
-            search=[("product_id", "!=", False)],
+            search=[
+                ("product_id", "!=", False),
+                (
+                    "write_date",
+                    ">=",
+                    self.startdate,
+                ),
+                (
+                    "write_date",
+                    "<=",
+                    self.enddate,
+                ),
+            ],
             fields=[
                 "qty_delivered",
                 "state",
@@ -2095,11 +2112,11 @@ class exporter(object):
                         mv["product_uom"],
                         self.product_product[mv["product_id"][0]]["template"],
                     )
-                    yield '<flow quantity="%s"><item name=%s/></flow>\n' % (
+                    yield '<flow xsi:type="flow_start" quantity="%s"><item name=%s/></flow>\n' % (
                         -qty_flow,
                         quoteattr(consumed_item["name"]),
                     )
-                yield '<flow quantity="%s"><item name=%s/></flow>\n' % (
+                yield '<flow xsi:type="flow_end" quantity="%s"><item name=%s/></flow>\n' % (
                     qty,
                     quoteattr(item["name"]),
                 )
