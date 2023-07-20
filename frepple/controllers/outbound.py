@@ -1530,6 +1530,7 @@ class exporter(object):
                     "<=",
                     self.enddate,
                 ),
+                ("order_id.warehouse_id.name", "=", "CPU"),
             ],
             fields=[
                 "qty_delivered",
