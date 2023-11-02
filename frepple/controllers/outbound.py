@@ -2329,10 +2329,11 @@ class exporter(object):
             location = self.map_locations.get(i[1], None)
             lotname = i[4]
             if item and location:
-                inventory[(item["name"], location, lotname)] = (
+                inventory[(item["name"], location, lotname)] = max(
+                    0,
                     inventory.get((item["name"], location, lotname), 0)
                     + i[2]
-                    - (i[3] if self.respect_reservations else 0)
+                    - (i[3] if self.respect_reservations else 0),
                 )
                 if i[5]:
                     expirationdate[(item["name"], location, lotname)] = i[5]
